@@ -1,0 +1,23 @@
+site_number,site_name,latitude,longitude,map_name,altitude,distance_from_first_site_miles
+08165300,"N Fk Guadalupe Rv nr Hunt, TX",30.06410028,-99.3870175,"Bee Caves Creek, TX",1800.22,0
+08165500,"Guadalupe Rv at Hunt, TX",30.06993074,-99.3217122,"Hunt, TX",1722.82,3.93
+08166140,"Guadalupe Rv abv Bear Ck at Kerrville, TX",30.06965617,-99.1953454,"Kerrville, TX",1622.56,11.48
+08166200,"Guadalupe Rv at Kerrville, TX",30.053266,-99.163375,"Kerrville, TX",1601.14,13.41
+08166250,"Guadalupe Rv nr Center Point, TX",29.98777778,-99.11,"Center Point, TX",1529.54,17.41
+08167000,"Guadalupe Rv at Comfort, TX",29.96523889,-98.8971667,"Comfort, TX",1338.145,30.13
+08167200,"Guadalupe Rv at FM 474 nr Bergheim, TX",29.89358333,-98.6698333,"SISTERDALE, TX",1146.75,44.56
+08167500,"Guadalupe Rv nr Spring Branch, TX",29.8604957,-98.3836275,"Anhalt, TX",948.43,61.76
+08167800,"Guadalupe Rv at Sattler, TX",29.85910758,-98.1800106,"Sattler, TX",742.7,73.71
+08167900,"Guadalupe Rv at Third Crossing nr Sattler, TX",29.80368889,-98.1630889,Sattler,677.97,75.55
+08168500,"Guadalupe Rv abv Comal Rv at New Braunfels, TX",29.7149465,-98.1100083,New Braunfels East,586.8,80.3
+08169500,"Guadalupe Rv at New Braunfels, TX",29.69800265,-98.1066748,New Braunfels East,589.58,80.86
+08169740,"Guadalupe Rv at Hwy 123-BR at Seguin, TX",29.55140833,-97.9693806,,453.5,92.18
+08169792,"Guadalupe Rv at FM 1117 nr Seguin, TX",29.53616667,-97.8809444,"Seguin, TX",404.81,97.5
+08169845,"Guadalupe Rv at CR 143 nr Gonzales, TX",29.4876,-97.5875056,,279.45,115.16
+08173900,"Guadalupe Rv at Gonzales, TX",29.48440414,-97.4502702,"Gonzales South, TX",231.91,123
+08174700,"Guadalupe Rv at Hwy 183 nr Hochheim, TX",29.31446667,-97.3035,"Hochheim, TX",175.67,135.51
+08175800,"Guadalupe Rv at Cuero, TX",29.09053147,-97.3297129,"Cuero, TX",128.83,140.89
+08176500,"Guadalupe Rv at Victoria, TX",28.7930456,-97.0130429,"Victoria West, TX",28.81,167.88
+08177520,"Guadalupe Rv nr Bloomington, TX",28.66194444,-96.9652778,"Bloomington, TX",-0.78,175.27
+08188800,"Guadalupe Rv nr Tivoli, TX",28.50582149,-96.8847203,"Bloomington SW, TX",-0.88,185.49
+08188810,"Guadalupe Rv at SH 35 nr Tivoli, TX",28.4783224,-96.8627751,"Austwell, TX",-9.39,187.69
