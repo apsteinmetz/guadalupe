@@ -6,6 +6,8 @@ library(tidyverse)
 library(sf)
 library(elevatr)
 library(ggridges)
+library(gridExtra)
+library(grid)
 
 sites_metadata<- read_csv("data/sites_metadata.csv") |> 
   arrange(longitude) |> 
@@ -13,18 +15,25 @@ sites_metadata<- read_csv("data/sites_metadata.csv") |>
   # mutate(site_number = as_factor(site_number)) |> 
   # remove redunant parts of site names
   mutate(site_name = str_remove(site_name, " nr | at | abv ")) |> 
+  mutate(site_name = str_remove(site_name, ", TX")) |> 
   mutate(site_name = str_remove(site_name, "Guadalupe Rv"))
   
 # add location of camp mystic
-camp_mystic <- tibble(
-  site_number = "Camp Mystic",
-  site_name = "Camp Mystic",
-  latitude = 30.0101571,
-  longitude = -99.3736444,
-  altitude = 1000,
-  distance_from_first_site_miles = 0
-)
+camp_mystic_latlon <- c(latitude = 30.0101571,longitude = -99.3736444,altitude = 1850)
 
+# add camp mystic to sites_metadata
+sites_metadata <- sites_metadata |> 
+  mutate(distance_from_first_site_miles = distance_from_first_site_miles - distance_from_first_site_miles[2]) |>
+  add_row(site_number = "000001",
+          site_name = "Camp Mystic",
+          map_name = "Camp Mystic",
+          latitude = camp_mystic_latlon["latitude"],
+          longitude = camp_mystic_latlon["longitude"],
+          altitude = 1850,
+          distance_from_first_site_miles = 
+            # compute haveersine distance from first site
+            -geosphere::distHaversine(c(camp_mystic_latlon["longitude"], camp_mystic_latlon["latitude"]),
+                                     c(sites_metadata$longitude[2], sites_metadata$latitude[2])) / 1609.34)
 # load stream Rdata from data folder
 load("data/guadalupe_stream_data.RData")
 
@@ -32,7 +41,7 @@ stream_data_full <- stream_data |>
   group_by(site_number) |> 
   left_join(sites_metadata, by = "site_number") |> 
   # limit to sites within 75 miles
-  filter(distance_from_first_site_miles < 75) |>
+  filter(distance_from_first_site_miles < 70) |>
   # include just july 4th to July 6 2025
   filter(datetime >= as.POSIXct("2025-07-03 21:00:00",tz = "US/Central") & datetime <= as.POSIXct("2025-07-06",tz ="US/Central")) |>
   arrange(desc(distance_from_first_site_miles))
@@ -41,23 +50,46 @@ stream_data_full <- stream_data |>
 # reorder factor levels
 stream_data_full$site_name <- factor(stream_data_full$site_name, 
                                       levels = unique(stream_data_full$site_name))
-
-stream_data_full
-
 # plot distance vs altitude
-stream_data_full  |>
+gg_dist <- sites_metadata  |>
+  filter(distance_from_first_site_miles < 70) |>
+  filter(site_name != "Camp Mystic") |>
   ggplot(aes(x = distance_from_first_site_miles, y = altitude)) +
   geom_line() +
-  labs(title = "Drop for Guadalupe River Sites",
-       x = "Distance From First Site (miles)", 
-       y = "Altitude (ft)",
+  labs(title = "Camp Mystic is at a Higher Elevation than (Upstream From) all Stream Gages",
+       subtitle = "Elevation of Guadalupe River Sites vs. Distance from Guadalupe River Fork at Hunt",
+       x = "Distance From River Fork at Hunt (miles)", 
+       y = "Elevation (ft)",
       caption = "Source: USGS") +
-#  theme_minimal() + 
+  # add a vertical line at 0 distance
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  # set ylim at 2000
+  ylim(700, 2000) +
+  theme_minimal() + 
   # add labels with site names
-  geom_text(aes(label = site_name), hjust = 0.5, vjust = -0.5, size = 3)
+  geom_text(aes(label = site_name, hjust = 0.5, vjust = "top"), color = "blue",size = 4)
+
+# add segment between Camp Mystic and Hunt
+gg_dist <- gg_dist + geom_segment(data = sites_metadata, 
+                       aes(x = distance_from_first_site_miles[site_name == "Camp Mystic"], 
+                           y = altitude[site_name == "Camp Mystic"],
+                           xend = distance_from_first_site_miles[site_name == "Hunt"], 
+                           yend = altitude[site_name == "Hunt"]), 
+                       color = "red", 
+                       inherit.aes = FALSE) +
+  geom_label(data = sites_metadata %>% filter(site_name =="Camp Mystic"),
+            aes(x = distance_from_first_site_miles, 
+                y = altitude, 
+                label = paste(site_name,"(South Fork)")), 
+            hjust = 0.1, vjust = -0.5, size = 4, color = "red")
 
 
- # line plot of stream data
+# make plot background a gradient going from dark blue to light blue
+
+gg_dist
+
+ 
+# line plot of stream data
 stream_data_full |>
   ggplot(aes(x = datetime, y = gage_height_ft,color = site_name)) +  geom_line() +
   labs(title = "Stream Data for Guadalupe River Sites",
@@ -71,15 +103,15 @@ stream_data_full |>
 max_levels <- stream_data_full |>
   filter(distance_from_first_site_miles < 75) |>
   group_by(site_name) |>
-  summarize(max_gage_height = max(gage_height_ft, na.rm = TRUE),
+  summarize(max_gage_height_ft = max(gage_height_ft, na.rm = TRUE),
                     max_discharge_cfs = max(discharge_cfs, na.rm = TRUE)) |> 
-  left_join(stream_data_full,by = join_by(site_name,max_discharge_cfs == discharge_cfs)) |>
+  left_join(stream_data_full,by = join_by(site_name,max_gage_height_ft == gage_height_ft)) |> 
   group_by(site_name) |>
   filter(datetime == min(datetime, na.rm = TRUE))
 
 
 max_levels |> 
-  ggplot(aes(x = site_name, y = max_gage_height)) +
+  ggplot(aes(x = site_name, y = max_gage_height_ft)) +
   geom_col(fill = "steelblue") +
   labs(title = "Maximum Gage Height for Guadalupe River Sites",
        x = "Site Name", 
@@ -88,96 +120,154 @@ max_levels |>
   geom_text(aes(label = datetime),nudge_y = 15) +
   coord_flip()
 
-# make a ridge plot of gage height over time by site
-stream_data_full |>
-  ggplot(aes(x = datetime, y = site_name, fill = site_name, height = gage_height_ft)) +
+gg_ridge <-stream_data_full |>
+  # take just july 3-4
+  filter(datetime >= as.POSIXct("2025-07-03", tz = "US/Central") & 
+           datetime < as.POSIXct("2025-07-05", tz = "US/Central")) |>
+  ggplot(aes(x = datetime, y = site_name, 
+             fill = site_name,
+             height = gage_height_ft)) +
   geom_ridgeline(scale = .1, alpha = 0.8) +
-  labs(title = "Gage Height Distribution Over Time by Site",
-       subtitle = "Guadalupe River Sites, July 4-6, 2025",
-       x = "Gage Height (ft)", 
+  labs(title = "Gage Height at Each Site over Time",
+       subtitle = "Guadalupe River Sites, July 3-4, 2025",
+       x = "Time on July 3-4, 2025", 
+       y = "<- Downstream - Upstream ->") +
+  scale_fill_viridis_d() +
+  theme_minimal() +
+  theme(legend.position = "none") +
+   # show a  15 minute time scale on the x-axis
+  scale_x_datetime(date_breaks = "60 min", date_labels = "%H:%M") +
+   # rotate x-axis labels
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+# add a gradient nightime background to the gg_ridge plot
+  annotation_custom(
+    grob = rectGrob(
+      gp = gpar(fill = linearGradient(colours = c("black", "lightblue"), 
+                                      x1 = 0, y1 = 0, x2 = .6, y2 = 0), 
+                col = NA)
+    ),
+    xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf
+  ) +
+  geom_vline(xintercept = as.POSIXct("2025-07-04 06:40:00", tz = "US/Central"), 
+             linetype = "dashed", color = "black") +
+  geom_vline(xintercept = as.POSIXct("2025-07-04 00:00:00", tz = "US/Central"), 
+             linetype = "dashed", color = "white") +
+  annotate("text", 
+           x = as.POSIXct("2025-07-04 07:30:00", tz = "US/Central"), 
+           y = max(stream_data_full$gage_height_ft, na.rm = TRUE)/10 + 5, 
+           label = "Dawn",
+           vjust = -0.5, hjust = 0.5, size = 4, color = "black") +
+  annotate("text", 
+           x = as.POSIXct("2025-07-04 01:30:00", tz = "US/Central"), 
+           y = max(stream_data_full$gage_height_ft, na.rm = TRUE)/10 + 6, 
+           label = "Midnight",
+           vjust = -0.5, hjust = 0.5, size = 4, color = "white") +
+  geom_ridgeline(aes(x = datetime, y = site_name, 
+                     fill = site_name,
+                     height = gage_height_ft), 
+                 scale = .1, alpha = 0.8)
+gg_ridge
+
+gg_ridge_discharge <-stream_data_full |>
+  # take just july 4
+  filter(datetime >= as.POSIXct("2025-07-03", tz = "US/Central") & 
+           datetime < as.POSIXct("2025-07-05", tz = "US/Central")) |>
+  ggplot(aes(x = datetime, y = site_name, 
+             fill = site_name,
+             height = discharge_cfs)) +
+  geom_ridgeline(scale = .00005, alpha = 0.8) +
+  labs(title = "Discharge Rate (CFS) Distribution Over Time by Site",
+       subtitle = "Guadalupe River Sites, July 3-4, 2025",
+       x = "Time on July 3-4, 2025", 
        y = "Site Name") +
   scale_fill_viridis_d() +
   theme_minimal() +
   theme(legend.position = "none") +
- # show a  15 minute time scale on the x-axis
-  # scale_x_datetime(date_breaks = "15 min", date_labels = "%H:%M") +
+  # show a  15 minute time scale on the x-axis
+  scale_x_datetime(date_breaks = "60 min", date_labels = "%H:%M") +
   # rotate x-axis labels
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+gg_ridge_discharge
+
+# create a static map of the sites using ggplot2 and ggmap
 
 
+sites_metadata_crop <- sites_metadata |>
+  filter(distance_from_first_site_miles < 20)
+# Register Google Maps API key (if needed)
+# Get a base map centered around the average coordinates of the sites
+gg_map <- get_map(location = c(lon = mean(sites_metadata_crop$longitude, na.rm = TRUE), 
+                                lat = mean(sites_metadata_crop$latitude, na.rm = TRUE)), 
+                  zoom = 11, maptype = "terrain")
 
+# stadia
+maptype = "stamen_terrain_background"
+sour = "stadia"
+map_tiles <- get_map(location = c(left = min(sites_metadata_crop$longitude, na.rm = TRUE)-.02, 
+                                  bottom = min(sites_metadata_crop$latitude, na.rm = TRUE)-.02, 
+                                  right = max(sites_metadata_crop$longitude, na.rm = TRUE)+.02, 
+                                  top = max(sites_metadata_crop$latitude, na.rm = TRUE)+.02),
+                         zoom = 11, maptype = maptype,sour = sour)
 
+create_scale_bar <- function(map_data, scale_miles = 5) {
+  # Get map bounds
+  map_bounds <- attr(map_data, "bb")
+  
+  # Calculate positions for scale bar
+  x_start <- map_bounds$ll.lon + (map_bounds$ur.lon - map_bounds$ll.lon) * 0.4
+  y_pos <- map_bounds$ll.lat + (map_bounds$ur.lat - map_bounds$ll.lat) * 0.1
+  
+  # Convert miles to degrees (approximate)
+  miles_to_deg <- scale_miles / 69
+  x_end <- x_start + miles_to_deg
+  
+  list(
+    annotate("segment", x = x_start, y = y_pos, xend = x_end, yend = y_pos, 
+             color = "black", linewidth = 1.5),
+    annotate("text",x = (x_start + x_end) / 2, y = y_pos, 
+              label = paste(scale_miles, "miles"), 
+              vjust = -0.5, hjust = 0.5, size = 3, color = "black")
+  )
+}
 
+# Plot the sites on the map
+gg_map <- ggmap(map_tiles) +
+  geom_point(data = sites_metadata_crop, 
+             aes(x = longitude, y = latitude, color = site_name), 
+             size = 3) +
+  geom_text(data = sites_metadata_crop, 
+            aes(x = longitude, y = latitude, label = site_name), 
+            vjust = -1, hjust = 0.5, size = 3.5) +
+  create_scale_bar(map_tiles, scale_miles = 5) +
+  labs(title = "Guadalupe River Sites",
+       subtitle = "Locations of Stream Gages and Camp Mystic",
+       caption = "Source: USGS,© Stadia Maps © OpenMapTiles © OpenStreetMap",
+       x = "Longitude", 
+       y = "Latitude") +
+  theme_minimal() +
+  theme(legend.position = "none")
 
-# Create a leaflet map with the USGS sites showing the stream data
-leaflet_map <- leaflet(sites_metadata) %>%
-  addTiles() %>%  # Add OpenStreetMap tiles
-  addMarkers(
-    lng = ~longitude, 
-    lat = ~latitude,
-    popup = ~paste("<b>", site_name, "</b><br>",
-                   "Site Number:", site_number, "<br>",
-                   "Latitude:", round(latitude, 5), "<br>",
-                   "Longitude:", round(longitude, 5)),
-    label = ~site_name,
-    clusterOptions = markerClusterOptions()
-  ) %>%
-  setView(lng = mean(sites_metadata$longitude, na.rm = TRUE), 
-          lat = mean(sites_metadata$latitude, na.rm = TRUE), 
-          zoom = 8)
+gg_map
 
+# --------------------------------------------------------------------------------------
+# combine gg_dist, gg_ridge and gg_map into a 4x4 panel grid with panel one containing text
+text_for_panel <- paste0("Camp Mystic Area USGS Stream Gage Data\nJuly 3-4, 2025\n",
+                         "The Camp is upstream from all USGS sites.\n",
+                         "The first downstream site is 6 miles below at Hunt.\n",
+                         "On July 2 the river height at Hunt height was 7 feet and the flow was\n",
+                         "8 feet per second. Hunt stopped reporting around Midnight.\n",
+                         "on July 3-4 when the river height was 38 feet\n",
+                         "and the flow was 120 thousand cubic feet per second.\n",
+                         "It took 2 hours go from 7 feet to 38 feet at Hunt.\n",
+                         "Judging from this data, the wave would have the the camp\n",
+                         "around 11pm on the 3rd. The flood wave moved quickly downstream.")
+                         
 
-
-# Display the map
-leaflet_map
-
-# show a satellite map
-leaflet_map_satellite <- leaflet(sites_metadata) %>%
-  addProviderTiles("Esri.WorldImagery") %>%  # Add Esri satellite tiles
-  addMarkers(
-    lng = ~longitude, 
-    lat = ~latitude,
-    popup = ~paste("<b>", site_name, "</b><br>",
-                   "Site Number:", site_number, "<br>",
-                   "Latitude:", round(latitude, 5), "<br>",
-                   "Longitude:", round(longitude, 5)),
-    label = ~site_name,
-    clusterOptions = markerClusterOptions()
-  ) %>%
-  setView(lng = mean(sites_metadata$longitude, na.rm = TRUE), 
-          lat = mean(sites_metadata$latitude, na.rm = TRUE), 
-          zoom = 8)
-
-leaflet_map_satellite
-
-
-# create a bounding box for the map using sf_sites
-sf_sites <- st_as_sf(sites_metadata, coords = c("longitude", "latitude"), crs = 4326)
-bbox <- st_bbox(sf_sites) |> 
-  # expand the bounding box by 10% for better visibility
-  st_as_sfc() |>
-  st_buffer(dist = 0.1)
-
-#use the elevatr package to get elevation data
-elevation_data <- get_elev_raster(sf_sites, z = 10, clip = "bbox",expand = 0.1)
-# Plot the elevation data on the map
-leaflet_map_elevation <- leaflet() %>%
-  addTiles() %>%  # Add OpenStreetMap tiles
-  addRasterImage(elevation_data, colors = terrain.colors(10), opacity = 0.5) %>%
-  addMarkers(
-    data = sites_metadata,
-    lng = ~longitude, 
-    lat = ~latitude,
-    popup = ~paste("<b>", site_name, "</b><br>",
-                   "Site Number:", site_number, "<br>",
-                   "Latitude:", round(latitude, 5), "<br>",
-                   "Longitude:", round(longitude, 5)),
-    label = ~site_name,
-    clusterOptions = markerClusterOptions()
-  ) %>%
-  setView(lng = mean(sites_metadata$longitude, na.rm = TRUE), 
-          lat = mean(sites_metadata$latitude, na.rm = TRUE), 
-          zoom = 8)
-
-leaflet_map_elevation
+grid_plot <- grid.arrange(
+  textGrob(text_for_panel, gp = gpar(fontsize = 14)),
+  gg_dist,
+  gg_ridge,
+  gg_map,
+  ncol = 2, nrow = 2
+)
 
