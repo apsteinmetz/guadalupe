@@ -1,7 +1,13 @@
+# download USGS stream gage data for the Guadalupe River in Texas
+# Load required packages
 library(httr)
 library(jsonlite)
 library(tidyverse)
 library(geosphere)
+library(httr)
+library(readr)
+library(dplyr)
+library(lubridate)
 
 
 # Extract site numbers and names from the text
@@ -133,11 +139,6 @@ sites_metadata <- read_csv("data/sites_metadata.csv")
 #' 
 download_usgs_stream_data <- function(station_ids, start_date, end_date) {
   
-  # Load required libraries
-  if (!require(httr)) stop("httr package required")
-  if (!require(readr)) stop("readr package required") 
-  if (!require(dplyr)) stop("dplyr package required")
-  if (!require(lubridate)) stop("lubridate package required")
   
   # Validate inputs
   if (length(station_ids) == 0) stop("At least one station ID required")
@@ -255,7 +256,7 @@ download_usgs_stream_data <- function(station_ids, start_date, end_date) {
     ) %>%
     # Convert datetime
     mutate(
-      datetime = ymd_hm(datetime, tz = "UTC")
+      datetime = ymd_hm(datetime, tz = "US/Central")
     )
   
   # Handle discharge columns

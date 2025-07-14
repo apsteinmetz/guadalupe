@@ -8,6 +8,7 @@ library(elevatr)
 library(ggridges)
 library(gridExtra)
 library(grid)
+library(ggmap)
 
 sites_metadata<- read_csv("data/sites_metadata.csv") |> 
   arrange(longitude) |> 
@@ -43,8 +44,10 @@ stream_data_full <- stream_data |>
   # limit to sites within 75 miles
   filter(distance_from_first_site_miles < 70) |>
   # include just july 4th to July 6 2025
-  filter(datetime >= as.POSIXct("2025-07-03 21:00:00",tz = "US/Central") & datetime <= as.POSIXct("2025-07-06",tz ="US/Central")) |>
-  arrange(desc(distance_from_first_site_miles))
+  filter(datetime >= as.POSIXct("2025-07-04 02:00:00",tz = "US/Central") & 
+           datetime <= as.POSIXct("2025-07-05",tz ="US/Central")) |>
+  arrange(desc(distance_from_first_site_miles)) |> 
+  select(site_name,everything())
 
 
 # reorder factor levels
@@ -100,14 +103,12 @@ stream_data_full |>
 # bar chart showing maximum gage height for each site, sorted by distance from first site
 
 
-max_levels <- stream_data_full |>
+max_heights <- stream_data_full |>
   filter(distance_from_first_site_miles < 75) |>
   group_by(site_name) |>
-  summarize(max_gage_height_ft = max(gage_height_ft, na.rm = TRUE),
-                    max_discharge_cfs = max(discharge_cfs, na.rm = TRUE)) |> 
-  left_join(stream_data_full,by = join_by(site_name,max_gage_height_ft == gage_height_ft)) |> 
-  group_by(site_name) |>
-  filter(datetime == min(datetime, na.rm = TRUE))
+  filter(gage_height_ft == max(gage_height_ft, na.rm = TRUE))
+
+max_heights
 
 
 max_levels |> 
@@ -117,20 +118,34 @@ max_levels |>
        x = "Site Name", 
        y = "Maximum Gage Height (ft)") +
   # annotate with datetime of maximum gage height
-  geom_text(aes(label = datetime),nudge_y = 15) +
+  geom_text(aes(label = datetime),nudge_y = 5) +
   coord_flip()
 
-gg_ridge <-stream_data_full |>
-  # take just july 3-4
-  filter(datetime >= as.POSIXct("2025-07-03", tz = "US/Central") & 
+# ------------------------------------------------------------------------------
+# create a ridgeline plot of gage height over time
+
+gg_ridge <- stream_data_full |>
+  # take just july 4
+  filter(datetime > as.POSIXct("2025-07-04 02:00:00", tz = "US/Central") & 
            datetime < as.POSIXct("2025-07-05", tz = "US/Central")) |>
   ggplot(aes(x = datetime, y = site_name, 
              fill = site_name,
              height = gage_height_ft)) +
-  geom_ridgeline(scale = .1, alpha = 0.8) +
-  labs(title = "Gage Height at Each Site over Time",
-       subtitle = "Guadalupe River Sites, July 3-4, 2025",
-       x = "Time on July 3-4, 2025", 
+   annotation_custom(
+     grob = rectGrob(
+       gp = gpar(fill = linearGradient(
+         colours = c("black", "lightblue"),
+         x1 = 0, y1 = 0, x2 = .9, y2 = 0
+       ), alpha = 1)
+     )
+   ) +
+ geom_ridgeline(aes(x = datetime, y = site_name, 
+                     fill = site_name,
+                     height = gage_height_ft), 
+                 scale = .1, alpha = 0.8) +
+labs(title = "Gage Height at Each Site over Time",
+       subtitle = "Guadalupe River Sites, July 4, 2025",
+       x = "Time on July 4, 2025", 
        y = "<- Downstream - Upstream ->") +
   scale_fill_viridis_d() +
   theme_minimal() +
@@ -139,38 +154,20 @@ gg_ridge <-stream_data_full |>
   scale_x_datetime(date_breaks = "60 min", date_labels = "%H:%M") +
    # rotate x-axis labels
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-# add a gradient nightime background to the gg_ridge plot
-  annotation_custom(
-    grob = rectGrob(
-      gp = gpar(fill = linearGradient(colours = c("black", "lightblue"), 
-                                      x1 = 0, y1 = 0, x2 = .6, y2 = 0), 
-                col = NA)
-    ),
-    xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf
-  ) +
   geom_vline(xintercept = as.POSIXct("2025-07-04 06:40:00", tz = "US/Central"), 
-             linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.POSIXct("2025-07-04 00:00:00", tz = "US/Central"), 
-             linetype = "dashed", color = "white") +
-  annotate("text", 
+             linetype = "dashed", color = "orange",linewidth = 1) +
+  annotate("text",label = "Dawn",
            x = as.POSIXct("2025-07-04 07:30:00", tz = "US/Central"), 
-           y = max(stream_data_full$gage_height_ft, na.rm = TRUE)/10 + 5, 
-           label = "Dawn",
-           vjust = -0.5, hjust = 0.5, size = 4, color = "black") +
-  annotate("text", 
-           x = as.POSIXct("2025-07-04 01:30:00", tz = "US/Central"), 
            y = max(stream_data_full$gage_height_ft, na.rm = TRUE)/10 + 6, 
-           label = "Midnight",
-           vjust = -0.5, hjust = 0.5, size = 4, color = "white") +
-  geom_ridgeline(aes(x = datetime, y = site_name, 
-                     fill = site_name,
-                     height = gage_height_ft), 
-                 scale = .1, alpha = 0.8)
+           vjust = -0.5, hjust = 0.5, size = 5, color = "orange")
+
 gg_ridge
+# ------------------------------------------------------------------------------
+# create a ridgeline plot of discharge rate over time
 
 gg_ridge_discharge <-stream_data_full |>
   # take just july 4
-  filter(datetime >= as.POSIXct("2025-07-03", tz = "US/Central") & 
+  filter(datetime > as.POSIXct("2025-07-03", tz = "US/Central") & 
            datetime < as.POSIXct("2025-07-05", tz = "US/Central")) |>
   ggplot(aes(x = datetime, y = site_name, 
              fill = site_name,
@@ -178,7 +175,7 @@ gg_ridge_discharge <-stream_data_full |>
   geom_ridgeline(scale = .00005, alpha = 0.8) +
   labs(title = "Discharge Rate (CFS) Distribution Over Time by Site",
        subtitle = "Guadalupe River Sites, July 3-4, 2025",
-       x = "Time on July 3-4, 2025", 
+       x = "Time on July 4, 2025", 
        y = "Site Name") +
   scale_fill_viridis_d() +
   theme_minimal() +
@@ -192,8 +189,12 @@ gg_ridge_discharge
 # create a static map of the sites using ggplot2 and ggmap
 
 
-sites_metadata_crop <- sites_metadata |>
-  filter(distance_from_first_site_miles < 20)
+sites_metadata_crop <- max_heights |> 
+  # format datetime as just time
+  mutate(datetime = format(datetime, "%H:%M")) |>
+  select(site_name, latitude, longitude, gage_height_ft, datetime)
+
+
 # Register Google Maps API key (if needed)
 # Get a base map centered around the average coordinates of the sites
 gg_map <- get_map(location = c(lon = mean(sites_metadata_crop$longitude, na.rm = TRUE), 
@@ -236,8 +237,18 @@ gg_map <- ggmap(map_tiles) +
              aes(x = longitude, y = latitude, color = site_name), 
              size = 3) +
   geom_text(data = sites_metadata_crop, 
-            aes(x = longitude, y = latitude, label = site_name), 
+            aes(x = longitude, y = latitude, label = paste0(site_name,"\n",gage_height_ft, " ft. at ", datetime," AM")), 
             vjust = -1, hjust = 0.5, size = 3.5) +
+  # add camp mystic location
+  geom_point(aes(x = camp_mystic_latlon["longitude"], 
+                 y = camp_mystic_latlon["latitude"]), 
+             color = "red", size = 4, shape = 17) +
+  geom_text(aes(x = camp_mystic_latlon["longitude"], 
+                y = camp_mystic_latlon["latitude"], 
+                label = "Camp Mystic"),
+            vjust = -1, hjust = 0.5, size = 3.5, color = "red") +
+  
+  
   create_scale_bar(map_tiles, scale_miles = 5) +
   labs(title = "Guadalupe River Sites",
        subtitle = "Locations of Stream Gages and Camp Mystic",
@@ -249,18 +260,19 @@ gg_map <- ggmap(map_tiles) +
 
 gg_map
 
+geom_function()
 # --------------------------------------------------------------------------------------
 # combine gg_dist, gg_ridge and gg_map into a 4x4 panel grid with panel one containing text
 text_for_panel <- paste0("Camp Mystic Area USGS Stream Gage Data\nJuly 3-4, 2025\n",
                          "The Camp is upstream from all USGS sites.\n",
                          "The first downstream site is 6 miles below at Hunt.\n",
-                         "On July 2 the river height at Hunt height was 7 feet and the flow was\n",
-                         "8 feet per second. Hunt stopped reporting around Midnight.\n",
-                         "on July 3-4 when the river height was 38 feet\n",
-                         "and the flow was 120 thousand cubic feet per second.\n",
-                         "It took 2 hours go from 7 feet to 38 feet at Hunt.\n",
-                         "Judging from this data, the wave would have the the camp\n",
-                         "around 11pm on the 3rd. The flood wave moved quickly downstream.")
+                         "At nightfall July 3 the river height at Hunt\n",
+                         "was 7 feet and the flow was 8 feet per second.\n",
+                         "Hunt stopped reporting around 5 AM on July 4 when the\n",
+                         "river height was 38 feet and the flow was 120,000\n",
+                         "cubic feet per second. It took 2 hours go from 8 feet to 38 feet at Hunt.\n",
+                         "Judging from the other sites, the wave would have hit\n",
+                         "the camp around 4 AM. The flood wave moved quickly downstream.")
                          
 
 grid_plot <- grid.arrange(
