@@ -190,6 +190,7 @@ gg_ridge_discharge
 
 
 sites_metadata_crop <- max_heights |> 
+  filter(distance_from_first_site_miles < 20) |>
   # format datetime as just time
   mutate(datetime = format(datetime, "%H:%M")) |>
   select(site_name, latitude, longitude, gage_height_ft, datetime)
@@ -238,7 +239,7 @@ gg_map <- ggmap(map_tiles) +
              size = 3) +
   geom_text(data = sites_metadata_crop, 
             aes(x = longitude, y = latitude, label = paste0(site_name,"\n",gage_height_ft, " ft. at ", datetime," AM")), 
-            vjust = -1, hjust = 0.5, size = 3.5) +
+            vjust = -.2, hjust = 0.5, size = 3.5) +
   # add camp mystic location
   geom_point(aes(x = camp_mystic_latlon["longitude"], 
                  y = camp_mystic_latlon["latitude"]), 
@@ -263,7 +264,7 @@ gg_map
 geom_function()
 # --------------------------------------------------------------------------------------
 # combine gg_dist, gg_ridge and gg_map into a 4x4 panel grid with panel one containing text
-text_for_panel <- paste0("Camp Mystic Area USGS Stream Gage Data\nJuly 3-4, 2025\n",
+text_for_panel <- paste0("Camp Mystic Area USGS Stream Gage Data\nJuly 4, 2025\n",
                          "The Camp is upstream from all USGS sites.\n",
                          "The first downstream site is 6 miles below at Hunt.\n",
                          "At nightfall July 3 the river height at Hunt\n",
@@ -272,7 +273,8 @@ text_for_panel <- paste0("Camp Mystic Area USGS Stream Gage Data\nJuly 3-4, 2025
                          "river height was 38 feet and the flow was 120,000\n",
                          "cubic feet per second. It took 2 hours go from 8 feet to 38 feet at Hunt.\n",
                          "Judging from the other sites, the wave would have hit\n",
-                         "the camp around 4 AM. The flood wave moved quickly downstream.")
+                         "the camp around 4 AM. The flood wave moved quickly downstream.\n",
+                         "The dam at Sattler was not breached.")
                          
 
 grid_plot <- grid.arrange(
