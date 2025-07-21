@@ -108,11 +108,8 @@ max_heights <- stream_data_full |>
   group_by(site_name) |>
   filter(gage_height_ft == max(gage_height_ft, na.rm = TRUE))
 
-max_heights
-
-
-max_levels |> 
-  ggplot(aes(x = site_name, y = max_gage_height_ft)) +
+max_heights |> 
+  ggplot(aes(x = site_name, y = gage_height_ft)) +
   geom_col(fill = "steelblue") +
   labs(title = "Maximum Gage Height for Guadalupe River Sites",
        x = "Site Name", 
